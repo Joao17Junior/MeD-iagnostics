@@ -1,0 +1,18 @@
+# --- Parsing Data ---
+pypdf
+pydicom
+pillow
+
+# --- Vector DB ---
+chromadb
+rank-bm25
+
+# --- AI ---
+
+# --- Data Validation ---
+numpy
+pydantic
+python-dotenv
+
+# --- UI ---
+streamlit
