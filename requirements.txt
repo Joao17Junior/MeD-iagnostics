@@ -18,6 +18,7 @@ numpy
 matplotlib
 pydantic
 python-dotenv
+pytest
 
 # --- UI ---
 streamlit
