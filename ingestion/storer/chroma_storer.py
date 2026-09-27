@@ -7,7 +7,7 @@ from ingestion.schema import DocumentChunk
 class Chroma_Storer:
     def __init__(
             self,
-            db_path: str = "./Med_Bank/chroma_db",
+            db_path: str = "./data/chromadb",
             collection_name: str = "med-iagnostics"
             ):
 
