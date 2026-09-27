@@ -33,9 +33,12 @@ class BM25_Storer:
                 pass
 
     def add_chunks(self, chunks: List[DocumentChunk]) -> None:
-        self.chunks.extend(chunks)
-        new_tokens = [self._tokenize(chunk.content) for chunk in chunks]
-        self.tokens.extend(new_tokens)
+        replacements = {chunk.id: chunk for chunk in chunks}
+        retained_chunks = [
+            chunk for chunk in self.chunks if chunk.id not in replacements
+        ]
+        self.chunks = retained_chunks + list(replacements.values())
+        self.tokens = [self._tokenize(chunk.content) for chunk in self.chunks]
 
         self.bm25 = BM25Okapi(self.tokens)
         self._save_index()
