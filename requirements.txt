@@ -8,9 +8,14 @@ chromadb
 rank-bm25
 
 # --- AI ---
+transformers
+open_clip_torch
+torch
+torchvision
 
 # --- Data Validation ---
 numpy
+matplotlib
 pydantic
 python-dotenv
 
