@@ -23,9 +23,15 @@ class HybridRetriever:
         self.bm25_storer.add_chunks(chunks)
 
     def search(
-        self, query_text: str, n_results: int = 5, k: int = 60
+        self,
+        query_text: str,
+        n_results: int = 5,
+        k: int = 60,
+        query_embedding: Optional[List[float]] = None,
+        max_chroma_distance: Optional[float] = None,
+        min_bm25_score: float = 0.0,
     ) -> List[Dict[str, Any]]:
-        query_vector = self.embedder.embed_txt(query_text)[0]
+        query_vector = query_embedding or self.embedder.embed_txt(query_text)[0]
 
         chroma_res = self.chroma_storer.query_similar(
             query_embedding=query_vector, n_results=n_results * 2
@@ -42,10 +48,16 @@ class HybridRetriever:
             ids = chroma_res["ids"][0]
             documents = chroma_res["documents"][0]
             metadatas = chroma_res["metadatas"][0]
+            distances = chroma_res.get("distances", [[]])[0]
 
-            for rank, (doc_id, doc_text, meta) in enumerate(
-                zip(ids, documents, metadatas), start=1
+            for rank, (doc_id, doc_text, meta, distance) in enumerate(
+                zip(ids, documents, metadatas, distances), start=1
             ):
+                if (
+                    max_chroma_distance is not None
+                    and distance > max_chroma_distance
+                ):
+                    continue
                 if doc_id not in chunk_map:
                     chunk_map[doc_id] = DocumentChunk(
                         id=doc_id, content=doc_text, metadata=meta
@@ -56,6 +68,8 @@ class HybridRetriever:
             for item in bm25_res:
                 chunk: DocumentChunk = item["chunk"]
                 rank: int = item["rank"]
+                if item["score"] < min_bm25_score:
+                    continue
                 doc_id = chunk.id
 
                 if doc_id not in chunk_map:
