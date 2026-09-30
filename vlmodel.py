@@ -40,3 +40,65 @@ class Med_VLM:
         # here we can call the hybrid query in the retrieved chunks for the data thats similar and we can keep it in stack (to implement)
         # for now we shall use the retrieved_chunks as context and not as thought in the line above
         # TODO: build context [], create the prompt, prepare input payload, process input and gen output
+
+        # context
+        context_parts = []
+        for i, item in enumerate(retrieved_chunks, start=1):
+            chunk = item["chunk"]
+            context_parts.append(f"--- Doc {i} ---\n- content: {chunk.content}\n- metadata: {chunk.metadata}")
+        
+        context_str = "\n\n".join(context_parts)
+
+        # prompt
+        prompt_text = (
+                "You are a medical assistent specialized in diagnostics.\n"
+                "Answer the question posted by the user in a clear and objective way, "
+                "backing yourself up EXCLUSIVELY with the clinical context given "
+                "(and in the image sent, if applicable).\n"
+                "If the information is not available in the context, declare explicitly that "
+                "you have not found it, so you shall not give an answer!\n\n"
+                f"### Clinical Context Retrieved:\n{context_str}\n\n"
+                f"### User Question:\n{query}"
+                )
+
+
+        # content payload
+        content = []
+        if image is not None:
+            content.append({"type": "image", "image": image})
+        content.append({"type": "text", "text": prompt_text})
+
+        messages = [{"role": "user", "content": content}]
+
+        # process input
+        text_prompt = self.processor.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+                )
+
+        inputs = self.processor(
+                text=[text_prompt],
+                images=[image] if image is not None else None,
+                padding=True,
+                return_tensors="pt"
+                ).to(self.device)
+
+        with torch.no_grad():
+            generated_ids = self.model.generate(
+                    **inputs, max_new_tokens=max_new_tokens
+                    )
+
+        # remove prompt tokens
+        generated_ids_trimmed = [out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
+
+        output_text = self.processor.batch_decode(
+                generated_ids_trimmed,
+                skip_special_tokens = True,
+                clean_up_tokenization_spaces = False
+                )
+
+        print(output_text)
+
+        return output_text[0]
+
+
+    
