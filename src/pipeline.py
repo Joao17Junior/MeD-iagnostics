@@ -61,7 +61,7 @@ class RAG_Pipeline:
         retrieved_res = self.retriever.search(
                 query_text = search_query, 
                 n_results = n_results,
-                max_chroma_distace = max_chroma_distance,
+                max_chroma_distance = max_chroma_distance,
                 min_bm25_score = min_bm25_score
                 )
 
