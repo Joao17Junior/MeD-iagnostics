@@ -39,7 +39,6 @@ class Med_VLM:
 
         # here we can call the hybrid query in the retrieved chunks for the data thats similar and we can keep it in stack (to implement)
         # for now we shall use the retrieved_chunks as context and not as thought in the line above
-        # TODO: build context [], create the prompt, prepare input payload, process input and gen output
 
         # context
         context_parts = []
@@ -95,8 +94,6 @@ class Med_VLM:
                 skip_special_tokens = True,
                 clean_up_tokenization_spaces = False
                 )
-
-        print(output_text)
 
         return output_text[0]
 

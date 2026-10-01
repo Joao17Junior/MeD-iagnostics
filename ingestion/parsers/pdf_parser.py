@@ -5,6 +5,13 @@ from ingestion.schema import DocumentChunk
 
 class PDF_Parser:
     def __init__(self, chunk_size: int = 500, chunk_overlap: int = 50):
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than zero")
+        if chunk_overlap < 0:
+            raise ValueError("chunk_overlap cannot be negative")
+        if chunk_overlap >= chunk_size:
+            raise ValueError("chunk_overlap must be smaller than chunk_size")
+
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
