@@ -1,5 +1,7 @@
 import argparse
 import hashlib
+import logging
+import time
 from pathlib import Path
 from typing import Callable, Iterable, List
 
@@ -13,6 +15,7 @@ from ingestion.vectoring.embedder import BMC_Embedder
 
 
 SUPPORTED_SUFFIXES = {".dcm", ".dicom", ".pdf"}
+LOGGER = logging.getLogger(__name__)
 
 
 def discover_files(raw_dir: Path) -> List[Path]:
@@ -51,29 +54,64 @@ def ingest(
     bm25_index: Path,
     chunk_size: int = 500,
     chunk_overlap: int = 50,
+    embedding_batch_size: int = 32,
     embedder_factory: Callable[[], BMC_Embedder] = BMC_Embedder,
 ) -> int:
+    if embedding_batch_size <= 0:
+        raise ValueError("embedding_batch_size must be greater than zero")
+
+    started_at = time.perf_counter()
+    LOGGER.info("Starting ingestion from %s", raw_dir)
     files = discover_files(raw_dir)
     if not files:
         raise FileNotFoundError(f"No supported documents found in {raw_dir}")
+    LOGGER.info("Discovered %d supported file(s)", len(files))
 
     parsers = (
         PDF_Parser(chunk_size=chunk_size, chunk_overlap=chunk_overlap),
         DICOM_Parser(),
     )
+    parse_started_at = time.perf_counter()
     chunks = parse_files(files, *parsers)
     if not chunks:
         raise ValueError("The discovered documents produced no text chunks")
+    LOGGER.info(
+        "Parsed %d chunk(s) in %.2f seconds",
+        len(chunks),
+        time.perf_counter() - parse_started_at,
+    )
 
+    embed_started_at = time.perf_counter()
     embedder = embedder_factory()
-    embeddings = embedder.embed_txt([chunk.content for chunk in chunks])
+    embeddings = []
+    for start in range(0, len(chunks), embedding_batch_size):
+        batch = chunks[start : start + embedding_batch_size]
+        LOGGER.info(
+            "Embedding batch %d-%d of %d",
+            start + 1,
+            start + len(batch),
+            len(chunks),
+        )
+        embeddings.extend(embedder.embed_txt([chunk.content for chunk in batch]))
+    LOGGER.info(
+        "Generated %d embedding(s) in %.2f seconds",
+        len(embeddings),
+        time.perf_counter() - embed_started_at,
+    )
 
+    storage_started_at = time.perf_counter()
     retriever = HybridRetriever(
         chroma_storer=Chroma_Storer(db_path=str(chroma_dir)),
         bm25_storer=BM25_Storer(index_path=str(bm25_index)),
         embedder=embedder,
     )
     retriever.add_chunks(chunks, embeddings)
+    LOGGER.info(
+        "Stored %d chunk(s) in %.2f seconds; total ingestion time %.2f seconds",
+        len(chunks),
+        time.perf_counter() - storage_started_at,
+        time.perf_counter() - started_at,
+    )
     return len(chunks)
 
 
@@ -86,11 +124,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--chunk-size", type=int, default=500)
     parser.add_argument("--chunk-overlap", type=int, default=50)
+    parser.add_argument("--embedding-batch-size", type=int, default=32)
+    parser.add_argument("--verbose", action="store_true")
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
+    logging.basicConfig(
+        level=logging.INFO if args.verbose else logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     if args.chunk_size <= args.chunk_overlap:
         raise ValueError("chunk-size must be greater than chunk-overlap")
     count = ingest(
@@ -99,6 +143,7 @@ def main() -> None:
         bm25_index=args.bm25_index,
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
+        embedding_batch_size=args.embedding_batch_size,
     )
     print(f"Ingested {count} chunks from {args.raw_dir}")
 
